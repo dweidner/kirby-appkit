@@ -214,8 +214,8 @@ class App {
     $this->configure();
     $this->plugins();
 
-    // Register default routes for the index page and 404 errors
-    $this->router()->register( '/', array( 'template' => 'default' ) );
+    // Register default routes for the index page
+    $this->router()->register( '/', array( 'template' => 'home' ) );
 
     // Determine the currently active route
     $path  = implode( '/', (array) url::fragments( detect::path() ) );
