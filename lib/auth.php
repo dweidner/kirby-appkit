@@ -2,6 +2,7 @@
 
 namespace Appkit;
 
+use C;
 use S;
 use Str;
 use Cookie;
