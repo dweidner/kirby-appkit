@@ -266,7 +266,7 @@ class App {
 
     // Template properties
     $args = a::get( $options, 'arguments', array() );
-    $controller = a::get( $options, 'controller' );
+    $controller = a::get( $options, 'controller', $tpl );
 
     // Load the controller from the application directory
     if ( is_string( $controller ) && file_exists( $finder->controllers() . DS . $controller . '.php' ) ) {
