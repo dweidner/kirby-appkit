@@ -63,4 +63,32 @@ class Finder extends Obj {
 
   }
 
+  /**
+   * Tries to find the given file. Returns a the path to a variation of the
+   * file name if it matches the current environment better.
+   *
+   * @param   string  $file    Name of the file to load (incl. the extension).
+   * @return  string
+   */
+  public function alter( $file ) {
+
+    $path = f::dirname( $file );
+    $name = f::name( $file );
+    $ext  = f::extension( $file );
+
+    $files = array(
+      $file,
+      $path . DS . $name . '.' . server::get('SERVER_NAME') . '.' . $ext,
+      $path . DS . $name . '.' . server::get('SERVER_ADDR') . '.' . $ext,
+    );
+
+    if ( true === c::get('debug') ) {
+      $files[] = $path . DS . $name . '.debug.' . $ext;
+    }
+
+    $files = array_filter( $files, 'file_exists' );
+    return ! empty( $files ) ? a::last( $files ) : $file;
+
+  }
+
 }
