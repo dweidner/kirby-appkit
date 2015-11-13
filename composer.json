@@ -1,0 +1,22 @@
+{
+  "name": "dweidner/kirby-appkit",
+  "type": "project",
+  "description": "",
+  "keywords": ["getkirby", "toolkit"],
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Daniel Weidner",
+      "email": "hallo@danielweidner.de",
+      "homepage": "http://danielweidner.de"
+    }
+  ],
+  "support": {
+    "email": "hallo@danielweidner.de",
+    "source": "https://github.com/dweidner/kirby-appkit",
+    "issues": "https://github.com/dweidner/kirby-appkit/issues"
+  },
+  "replace": {
+    "getkirby/toolkit": "^2.1"
+  }
+}

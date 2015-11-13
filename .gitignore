@@ -1,0 +1,8 @@
+# OSX
+.DS_STORE
+
+# NodeJS
+node_modules
+
+# Sublime Text
+*.sublime-*

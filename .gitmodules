@@ -1,0 +1,6 @@
+[submodule "vendor/kirby-toolkit"]
+	path = vendor/kirby-toolkit
+	url = https://github.com/getkirby/toolkit.git
+[submodule "vendor/getkirby/toolkit"]
+	path = vendor/getkirby/toolkit
+	url = https://github.com/getkirby/toolkit.git
