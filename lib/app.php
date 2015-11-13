@@ -246,8 +246,13 @@ class App {
     }
 
     // Wrap the content in a response object
-    $type = is_string( $content ) ? 'html' : 'json';
-    return new Response( $content, $type, $status );
+    if ( is_a( $content, 'Response' ) ) {
+      return $content;
+    } else if ( is_string( $content ) ) {
+      return new Response( $content, 'html', $status );
+    } else {
+      return new Response( $content, 'json', $status );
+    }
 
   }
 
