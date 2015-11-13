@@ -223,8 +223,7 @@ class App {
 
     // Render the error page if no route was found
     if ( empty( $route ) ) {
-      $status  = 404;
-      $content = $this->template( 'error' );
+      return $this->error();
     }
 
     // Render a page template
@@ -234,26 +233,32 @@ class App {
         'arguments'  => compact('query'),
         'controller' => $route->controller(),
       );
-
-      $status  = 200;
-      $content = $this->template( $route->template, $options );
+      return new Response( $this->template( $route->template, $options ), 'html' );
     }
 
     // Execute the action of the route
-    else {
-      $status  = 200;
-      $content = call( $route->action(), $route->arguments() );
-    }
+    $response = call( $route->action(), $route->arguments() );
 
     // Wrap the content in a response object
-    if ( is_a( $content, 'Response' ) ) {
-      return $content;
-    } else if ( is_string( $content ) ) {
-      return new Response( $content, 'html', $status );
+    if ( false === $response ) {
+      return $this->error();
+    } else if ( is_a( $response, 'Response' ) ) {
+      return $response;
+    } else if ( is_string( $response ) ) {
+      return new Response( $response, 'html' );
     } else {
-      return new Response( $content, 'json', $status );
+      return new Response( $response, 'json' );
     }
 
+  }
+
+  /**
+   * Generate an error response.
+   *
+   * @return  Response
+   */
+  protected function error() {
+    return new Response( $this->template( 'error' ), 'html', 404 );
   }
 
   /**
