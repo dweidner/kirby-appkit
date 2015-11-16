@@ -107,23 +107,19 @@ class App {
       return $this->finder;
     }
 
-    return $this->finder = new Finder( dirname( __DIR__ ) );
+    $root = dirname( __DIR__ );
 
-  }
-
-  /**
-   * Get access to the component maintaining application routes.
-   *
-   * @return  Router
-   */
-  public function router() {
-
-    if ( ! is_null( $this->router ) ) {
-      return $this->router;
-    }
-
-    $routes = c::get( 'routes', array() );
-    return $this->router = new Router( $routes );
+    return $this->finder = new Finder( array(
+      'root'        => $root,
+      'assets'      => $root . DS . '',
+      'accounts'    => $root . DS . 'app' . DS . 'accounts',
+      'controllers' => $root . DS . 'app' . DS . 'controllers',
+      'partials'    => $root . DS . 'app' . DS . 'partials',
+      'plugins'     => $root . DS . 'app' . DS . 'plugins',
+      'routes'      => $root . DS . 'app' . DS . 'routes',
+      'views'       => $root . DS . 'app' . DS . 'views',
+      'storage'     => $root . DS . 'storage',
+    ) );
 
   }
 
@@ -167,10 +163,10 @@ class App {
       return false;
     }
 
-    $files = $this->finder()->extensions( $path );
+    $files = $this->finder()->scan( $path, true );
 
     foreach ( $files as $file ) {
-      if ( file_exists( $file ) ) include_once $file;
+      include_once $file;
     }
 
     return true;
@@ -178,20 +174,43 @@ class App {
   }
 
   /**
-   * Register a set of application routes.
+   * Get access to the component maintaining application routes.
    *
-   * @param   array  $routes  Collection of application routes.
+   * @return  Router
+   */
+  public function router() {
+
+    if ( ! is_null( $this->router ) ) {
+      return $this->router;
+    }
+
+    return $this->router = new Router();
+
+  }
+
+  /**
+   * Load and register routes from the app directory.
+   *
    * @return  array
    */
-  public function routes( $routes = null ) {
+  public function routes() {
 
-    if ( is_null( $routes ) ) {
-      return $this->routes;
+    if ( ! is_null( $this->router ) ) {
+      return $this->router->routes();
     }
 
-    foreach ( (array) $routes as $pattern => $options ) {
-      $this->route( $pattern, $options );
+    $dir    = $this->finder()->routes();
+    $files  = $this->finder()->scan( $dir );
+    $router = $this->router();
+
+    foreach( $files as $file ) {
+      $route = include_once $file;
+      if ( is_array( $route ) && array_key_exists( 'pattern', $route ) ) {
+        $router->register( $route['pattern'], $route );
+      }
     }
+
+    return $routes;
 
   }
 
@@ -210,33 +229,41 @@ class App {
    */
   public function launch() {
 
-    // Run application configuration and load plugins
+    // Run application configuration
     $this->configure();
-    $this->plugins();
 
-    // Register default routes for the index page
-    $this->router()->register( '/', array( 'template' => 'home' ) );
+    // Register routes defined within the routes directory of the app
+    $this->routes();
+
+    // Register default route for the index page
+    $this->router()->register( '/', c::get('route.index', array( 'view' => 'home' ) ) );
+
+    // Load application plugins
+    $this->plugins();
 
     // Determine the currently active route
     $path  = implode( '/', (array) url::fragments( detect::path() ) );
     $route = $this->router()->run( $path );
 
-    // Render the error page if no route was found
+    // Render the error page if route not found
     if ( empty( $route ) ) {
       return $this->error();
     }
 
-    // Render a page template
-    else if ( ! empty( $route->template ) ) {
+    // Render an application view
+    if ( ! empty( $route->view ) ) {
+
       $query = $route->arguments();
-      $options = array(
+      $content = $this->view( $route->view, array(
         'arguments'  => compact('query'),
         'controller' => $route->controller(),
-      );
-      return new Response( $this->template( $route->template, $options ), 'html' );
+      ) );
+
+      return new Response( $content, 'html' );
+
     }
 
-    // Execute the action of the route
+    // Execute the action of the route and return the response
     $response = call( $route->action(), $route->arguments() );
 
     // Wrap the content in a response object
@@ -258,45 +285,57 @@ class App {
    * @return  Response
    */
   protected function error() {
-    return new Response( $this->template( 'error' ), 'html', 404 );
+
+    $route = (array) c::get( 'route.error', array( 'view' => 'error' ) );
+    $content = false;
+
+    if ( ! empty( $route['view'] ) ) {
+      $content = $this->view( a::get( $route, 'view' ), $route );
+    } else if ( ! empty( $route['action'] ) ) {
+      $args = a::get( $route, 'view', array() );
+      $content = call( a::get( $route, 'action' ), $args );
+    }
+
+    return new Response( $content, 'html', 404 );
+
   }
 
   /**
-   * Render a page template.
+   * Render a view template.
    *
-   * @param   string  $tpl          Template to use.
-   * @param   object  $options      Page controller.
+   * @param   string  $name     Name of the view to render.
+   * @param   object  $options  Page controller.
    */
-  protected function template( $tpl, $options = array() ) {
+  protected function view( $name, $options = array() ) {
 
     // Construct the template path
     $finder = $this->finder();
-    $file = trim( str_replace( '/', DS, $tpl ), '/' );
-    $path = $finder->templates() . DS . $file . '.php';
+    $file = trim( str_replace( '/', DS, $name ), '/' );
+    $path = $finder->views . DS . $file . '.php';
 
     // Template properties
-    $args = a::get( $options, 'arguments', array() );
-    $controller = a::get( $options, 'controller', $tpl );
+    $scope = a::get( $options, 'arguments', array() );
+    $controller = a::get( $options, 'controller', $name );
 
     // Load the controller from the application directory
-    if ( is_string( $controller ) && file_exists( $finder->controllers() . DS . $controller . '.php' ) ) {
-      $controller = require_once $finder->controllers() . DS . $controller . '.php';
+    if ( is_string( $controller ) && file_exists( $finder->controllers . DS . $controller . '.php' ) ) {
+      $controller = require_once $finder->controllers . DS . $controller . '.php';
     }
 
     // Complement the template scope using a page controller
-    if ( ! empty( $controller ) && is_callable( $controller ) ) {
+    if ( ! empty( $controller ) ) {
 
-      $query = a::get( $args, 'query', array() );
-      $scope = call( $controller, $query );
+      $query = a::get( $scope, 'query', array() );
+      $return = call( $controller, $query );
 
-      if ( ! empty( $scope ) ) {
-        $args = array_merge( $args, $scope );
+      if ( ! empty( $return ) ) {
+        $scope = array_merge( $scope, $return );
       }
 
     }
 
     // Load the contents of the template
-    return tpl::load( $path, $args );
+    return tpl::load( $path, $scope );
 
   }
 
