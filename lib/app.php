@@ -6,6 +6,7 @@ use A;
 use C;
 use Collection;
 use Detect;
+use F;
 use Response;
 use Router;
 use Tpl;
@@ -38,6 +39,13 @@ class App {
    * @var  static
    */
   protected static $instance = null;
+
+  /**
+   * Indicates whether application components are fully loaded.
+   *
+   * @var  boolean
+   */
+  protected $loaded = false;
 
   /**
    * Component used to retrieve application paths.
@@ -129,7 +137,7 @@ class App {
   public function configure() {
 
     // Load application configuration from a separate file
-    $file = $this->finder()->app() . DS . 'config.php';
+    $file = $this->finder()->root . DS . 'app' . DS . 'config.php';
 
     if ( file_exists( $file ) ) {
       include_once( $file );
@@ -153,7 +161,7 @@ class App {
   /**
    * Load all application plugins.
    *
-   * @return  boolean
+   * @return  array|boolean
    */
   public function plugins() {
 
@@ -169,7 +177,7 @@ class App {
       include_once $file;
     }
 
-    return true;
+    return $files;
 
   }
 
@@ -195,18 +203,19 @@ class App {
    */
   public function routes() {
 
-    if ( ! is_null( $this->router ) ) {
+    if ( $this->loaded ) {
       return $this->router->routes();
     }
 
     $dir    = $this->finder()->routes();
     $files  = $this->finder()->scan( $dir );
-    $router = $this->router();
+    $routes = array();
 
     foreach( $files as $file ) {
       $route = include_once $file;
-      if ( is_array( $route ) && array_key_exists( 'pattern', $route ) ) {
-        $router->register( $route['pattern'], $route );
+      if ( ! empty( $route ) && is_array( $route ) ) {
+        $pattern = a::get( $route, 'pattern', f::name( $file ) );
+        $routes[ $pattern ] = $route;
       }
     }
 
@@ -231,15 +240,16 @@ class App {
 
     // Run application configuration
     $this->configure();
-
-    // Register routes defined within the routes directory of the app
-    $this->routes();
+    $plugins = $this->plugins();
+    $routes = $this->routes();
 
     // Register default route for the index page
     $this->router()->register( '/', c::get('route.index', array( 'view' => 'home' ) ) );
 
-    // Load application plugins
-    $this->plugins();
+    // Register routes from the application folder
+    foreach ( $routes as $pattern => $options ) {
+      $this->router()->register( $pattern, $options );
+    }
 
     // Determine the currently active route
     $path  = implode( '/', (array) url::fragments( detect::path() ) );
@@ -280,27 +290,6 @@ class App {
   }
 
   /**
-   * Generate an error response.
-   *
-   * @return  Response
-   */
-  protected function error() {
-
-    $route = (array) c::get( 'route.error', array( 'view' => 'error' ) );
-    $content = false;
-
-    if ( ! empty( $route['view'] ) ) {
-      $content = $this->view( a::get( $route, 'view' ), $route );
-    } else if ( ! empty( $route['action'] ) ) {
-      $args = a::get( $route, 'view', array() );
-      $content = call( a::get( $route, 'action' ), $args );
-    }
-
-    return new Response( $content, 'html', 404 );
-
-  }
-
-  /**
    * Render a view template.
    *
    * @param   string  $name     Name of the view to render.
@@ -328,7 +317,7 @@ class App {
       $query = a::get( $scope, 'query', array() );
       $return = call( $controller, $query );
 
-      if ( ! empty( $return ) ) {
+      if ( is_array( $return ) ) {
         $scope = array_merge( $scope, $return );
       }
 
@@ -336,6 +325,28 @@ class App {
 
     // Load the contents of the template
     return tpl::load( $path, $scope );
+
+  }
+
+  /**
+   * Generate an error response.
+   *
+   * @return  Response
+   */
+  protected function error() {
+
+    $route = (array) c::get( 'route.error', array( 'view' => 'error' ) );
+    $content = false;
+
+    if ( ! empty( $route['view'] ) ) {
+      $content = $this->view( a::get( $route, 'view' ), $route );
+    } else if ( ! empty( $route['action'] ) ) {
+      $args = a::get( $route, 'view', array() );
+      $content = call( a::get( $route, 'action' ), $args );
+    }
+
+    $type = is_array( $content ) ? 'json' : 'html';
+    return new Response( $content, $type, 404 );
 
   }
 
